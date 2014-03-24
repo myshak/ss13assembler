@@ -24,7 +24,7 @@ MNEMONICS           =   [
 #  ("NOP",    "F", 1),
   ]
 
-#DEBUG = True
+DEBUG = False
 
 LABEL_IDENTIFIER    =   "[a-zA-Z]\w*"
 LABEL               =   "(" + LABEL_IDENTIFIER + "):"
@@ -63,7 +63,7 @@ def print_warning(ctx, warn):
   print ctx.orig_line    
   
 def emit(ctx, mnemonic, args):
-  # Convert arguments to hex char
+  # Convert arguments to a hex char
   args = [hex(int(x))[2:].upper() for x in args]
   debug_print(ctx, "Emiting %s %s" %(mnemonic, args), ctx.orig_line)
   
@@ -78,16 +78,13 @@ def handle_jump(ctx, mnemonic, args):
   
   arg = args[0]
   
-  #JMP  x   - x < 8:  pc -= 4*(x+1)
-  #       - x >= 8: pc += 4*(x-7)
-  
   if RE_LABEL_IDENTIFIER.match(arg):
     if arg not in ctx.labels:
       print_error(ctx, "Label '%s' was not delcared" % ( arg ))
       return
     
     label = ctx.labels[arg]
-    
+
     jump_len = label[1] - ctx.cur_instruction
     if jump_len == 0:
       # Ignore the JMP instruction
@@ -102,6 +99,8 @@ def handle_jump(ctx, mnemonic, args):
       print_error(ctx, "Distance to label '%s' is not a multiple of 4: distance is %s which is not in %s" % ( arg, abs(jump_len), repr(range(4,33,4)) ))
       return
     
+    #JMP  x <  8:  pc -= 4*(x+1)
+    #     x >= 8:  pc += 4*(x-7)
     if jump_len < 0:
       # Jump backward
       jump_val = (abs(jump_len)/4)-1
@@ -130,8 +129,6 @@ def handle_mnemonic(ctx, mnemonic, arg):
   args = "".join(arg.split())
   args = args.split(',')
   
-  ctx.cur_instruction += 1
-  
   # Check for arguments in an argumentless mnemonic
   if m[2] == 0 and args:
     print_error(ctx, "Unexpected argument(s) '%s' for argumentless mnemonic '%s'" % ( arg, mnemonic ))
@@ -154,6 +151,9 @@ def handle_mnemonic(ctx, mnemonic, arg):
         return
     
     emit(ctx, m, args)
+    
+  ctx.cur_instruction += 1
+
       
   
 def parse(filename):
@@ -181,6 +181,7 @@ def parse(filename):
           if label_name in ctx.labels:
             print_error(ctx, "Duplicate label '%s', preverious declaration at %s:%s" % (label_name, ctx.filename, ctx.labels[label_name][2]))
             return
+          # Add a label for the instruction that is next
           debug_print(ctx, "Adding label for instruction %s" % ctx.cur_instruction, line)
           ctx.labels[label_name] = (label_name, ctx.cur_instruction, ctx.cur_line)
           continue
