@@ -1,8 +1,11 @@
 #!/usr/bin/python
+#
+# SS13 LLJK MC14500B Assembler
+# Copyright (C) 2014 mysha (mysha@mysha.cu.cc) 
+# License: http://www.gnu.org/licenses/gpl.html GPL version 3 or higher
 
 import re
 import sys
-import os
 
 MNEMONICS           =   [
   # Mnemonic, opcode, argument count
@@ -30,7 +33,7 @@ LABEL_IDENTIFIER    =   "[a-zA-Z]\w*"
 LABEL               =   "(" + LABEL_IDENTIFIER + "):"
 COMMENT             =   "#.*$"
 
-RE_MNEMONIC         =   re.compile("^(" + "|".join([x[0] for x in MNEMONICS]) + ")\s+(-?\d|" + LABEL_IDENTIFIER + ")?$")
+RE_MNEMONIC         =   re.compile("^(" + "|".join([x[0] for x in MNEMONICS]) + ")\s*(-?\d|" + LABEL_IDENTIFIER + ")?$")
 RE_LABEL_IDENTIFIER =   re.compile("^" + LABEL_IDENTIFIER + "$")
 RE_LABEL            =   re.compile("^" + LABEL + "$")
 RE_COMMENT          =   re.compile(COMMENT)
@@ -46,8 +49,8 @@ class context:
     self.error = False
     self.orig_line = ""
 
-def usage():
-  print "Usage: assembler.py input.asm"
+def usage(executable):
+  print "Usage: %s <file>" % executable
 
 def debug_print(ctx, stmt, line):
   if DEBUG:
@@ -67,6 +70,9 @@ def emit(ctx, mnemonic, args):
   args = [hex(int(x))[2:].upper() for x in args]
   debug_print(ctx, "Emiting %s %s" %(mnemonic, args), ctx.orig_line)
   
+  # We need a full byte (opcode + argument), if none supplied, add a 0
+  if not args:
+    args = ["0"]
   ctx.bytecode.append(mnemonic[1] + ''.join(args))
 
 def handle_jump(ctx, mnemonic, args):
@@ -126,8 +132,11 @@ def handle_mnemonic(ctx, mnemonic, arg):
   # Grab the matching mnemonic
   # TODO: maybe make it a dict?
   m = [x for x in MNEMONICS if x[0] == mnemonic][0]
-  args = "".join(arg.split())
-  args = args.split(',')
+  if arg:
+    args = "".join(arg.split())
+    args = args.split(',')
+  else:
+    args = []
   
   # Check for arguments in an argumentless mnemonic
   if m[2] == 0 and args:
@@ -137,10 +146,16 @@ def handle_mnemonic(ctx, mnemonic, arg):
   if m[2] != len(args):
     print_error(ctx, "Unexpected number of arguments for mnemonic '%s': expected %s got %s" % ( mnemonic, m[2], len(args) ))
     return
-  # Check for correct range of arguments. Works for us, because all arguments are 4 bit numbers
   if mnemonic == "JMP":
     handle_jump(ctx, m, args)
+  elif mnemonic == "RTN":
+    # RTN skips next instruction. Just ignore it and the next instruction
+    # Offsets to labels will be different then those in the source, so give a warning
+    print_warning(ctx, "Mnemonic RTN used, ignoring it and the following instruction. Offsets may be different for non-label JMP instructions")
+    ctx.skip_next = True
+    return
   else:
+    # Check for correct range of arguments. Works for us, because all arguments are 4 bit numbers
     for i in args:
       try:
         if not (0 <= int(i) <= 15):
@@ -208,7 +223,7 @@ def parse(filename):
 
 def main(argv):
   if len(argv) < 2:
-    usage()
+    usage(argv[0])
     return 0
   
   parse(argv[1])
