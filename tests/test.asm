@@ -4,8 +4,9 @@ NOP
 label:
   OR 0 #foo?
   IEN 0 #barbar
+  RTN
   OEN 0
-  AND 0
+  AND FF
 label2:
   JMP label
   LD 1

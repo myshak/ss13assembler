@@ -213,6 +213,7 @@ def parse(filename):
         if is_mnemonic:
           debug_print(ctx, "Parsing mnemonic", line)
           if ctx.skip_next == True:
+            ctx.skip_next = False
             debug_print(ctx, "Skipping next instruction", line)
             continue
           handle_mnemonic(ctx, is_mnemonic.group(1), is_mnemonic.group(2))
