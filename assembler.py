@@ -33,7 +33,8 @@ LABEL_IDENTIFIER    =   "[a-zA-Z]\w*"
 LABEL               =   "(" + LABEL_IDENTIFIER + "):"
 COMMENT             =   "#.*$"
 
-RE_MNEMONIC         =   re.compile("^(" + "|".join([x[0] for x in MNEMONICS]) + ")\s*(-?\d|" + LABEL_IDENTIFIER + ")?$")
+RE_MNEMONIC         =   re.compile("^(" + "|".join([x[0] for x in MNEMONICS]) + ")" + 
+                                   "(?:\s+(-?[0-9a-fA-F]+|" + LABEL_IDENTIFIER + "))?$")
 RE_LABEL_IDENTIFIER =   re.compile("^" + LABEL_IDENTIFIER + "$")
 RE_LABEL            =   re.compile("^" + LABEL + "$")
 RE_COMMENT          =   re.compile(COMMENT)
@@ -65,9 +66,16 @@ def print_warning(ctx, warn):
   print "%s:%s: warning: %s" % (ctx.filename, ctx.cur_line, warn)
   print ctx.orig_line    
   
-def emit(ctx, mnemonic, args):
+def emit(ctx, mnemonic, arg):
   # Convert arguments to a hex char
-  args = [hex(int(x))[2:].upper() for x in args]
+  args = []
+  for i in args:
+    num = ""
+    if isinstance(i, str):
+      num = int(x, 16)
+    else:
+      num = i
+    args.append(hex(num)[2:].upper())
   debug_print(ctx, "Emiting %s %s" %(mnemonic, args), ctx.orig_line)
   
   # We need a full byte (opcode + argument), if none supplied, add a 0
@@ -117,7 +125,7 @@ def handle_jump(ctx, mnemonic, args):
       emit(ctx, mnemonic, [jump_val])
   else:
     try:
-      jump_val = int(arg)
+      jump_val = int(arg, 16)
       if not (0 <= jump_val <= 15):
         print_error(ctx, "Argument out of range: 0 <= %s <= 15" % ( jump_val ))
         return
@@ -158,7 +166,7 @@ def handle_mnemonic(ctx, mnemonic, arg):
     # Check for correct range of arguments. Works for us, because all arguments are 4 bit numbers
     for i in args:
       try:
-        if not (0 <= int(i) <= 15):
+        if not (0 <= int(i, 16) <= 15):
           print_error(ctx, "Argument out of range: 0 <= %s <= 15" % ( i ))
           return
       except ValueError:
