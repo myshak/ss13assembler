@@ -69,10 +69,10 @@ def print_warning(ctx, warn):
 def emit(ctx, mnemonic, arg):
   # Convert arguments to a hex char
   args = []
-  for i in args:
+  for i in arg:
     num = ""
     if isinstance(i, str):
-      num = int(x, 16)
+      num = int(i, 16)
     else:
       num = i
     args.append(hex(num)[2:].upper())
