@@ -34,7 +34,7 @@ LABEL               =   "(" + LABEL_IDENTIFIER + "):"
 COMMENT             =   "#.*$"
 
 RE_MNEMONIC         =   re.compile("^(" + "|".join([x[0] for x in MNEMONICS]) + ")" + 
-                                   "(?:\s+(-?[0-9a-fA-F]+|" + LABEL_IDENTIFIER + "))?$")
+                                   "(?:\s+(-?[0-9a-fA-F]+|" + LABEL_IDENTIFIER + "))?$", re.I)
 RE_LABEL_IDENTIFIER =   re.compile("^" + LABEL_IDENTIFIER + "$")
 RE_LABEL            =   re.compile("^" + LABEL + "$")
 RE_COMMENT          =   re.compile(COMMENT)
@@ -139,7 +139,7 @@ def handle_mnemonic(ctx, mnemonic, arg):
   debug_print(ctx, "Handling mnemonic %s" % mnemonic, ctx.orig_line)
   # Grab the matching mnemonic
   # TODO: maybe make it a dict?
-  m = [x for x in MNEMONICS if x[0] == mnemonic][0]
+  m = [x for x in MNEMONICS if x[0] == mnemonic.upper()][0]
   if arg:
     args = "".join(arg.split())
     args = args.split(',')
@@ -154,9 +154,9 @@ def handle_mnemonic(ctx, mnemonic, arg):
   if m[2] != len(args):
     print_error(ctx, "Unexpected number of arguments for mnemonic '%s': expected %s got %s" % ( mnemonic, m[2], len(args) ))
     return
-  if mnemonic == "JMP":
+  if mnemonic.upper() == "JMP":
     handle_jump(ctx, m, args)
-  elif mnemonic == "RTN":
+  elif mnemonic.upper() == "RTN":
     # RTN skips next instruction. Just ignore it and the next instruction
     # Offsets to labels will be different then those in the source, so give a warning
     print_warning(ctx, "Mnemonic RTN used, ignoring it and the following instruction. Offsets may be different for non-label JMP instructions")

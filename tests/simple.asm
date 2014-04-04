@@ -3,6 +3,9 @@
   OR	0
   IEN 	0
   OEN 	0
+  jmp loop
   AND 	0
   LD 	1
   STO 	1
+  NOP
+loop:
