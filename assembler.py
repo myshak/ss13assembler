@@ -27,7 +27,7 @@ MNEMONICS           =   [
 #  ("NOP",    "F", 1),
   ]
 
-DEBUG = False
+DEBUG = True
 
 LABEL_IDENTIFIER    =   "[a-zA-Z]\w*"
 LABEL               =   "(" + LABEL_IDENTIFIER + "):"
@@ -66,22 +66,67 @@ def print_warning(ctx, warn):
   print "%s:%s: warning: %s" % (ctx.filename, ctx.cur_line, warn)
   print ctx.orig_line    
   
+def to_hexstring(num):
+  val = ""
+  if isinstance(num, str):
+    val = int(num, 16)
+  else:
+    val = num
+  return hex(val)[2:].upper()
+  
 def emit(ctx, mnemonic, arg):
   # Convert arguments to a hex char
   args = []
   for i in arg:
-    num = ""
-    if isinstance(i, str):
-      num = int(i, 16)
+    if isinstance(i, str) or isinstance(i,int):
+      # Bare value
+      args.append(to_hexstring(i))
     else:
-      num = i
-    args.append(hex(num)[2:].upper())
+      # Deffered parameter
+      # Tuple of ("Instruction", param1, param2)
+      args.append(i)
   debug_print(ctx, "Emiting %s %s" %(mnemonic, args), ctx.orig_line)
   
   # We need a full byte (opcode + argument), if none supplied, add a 0
   if not args:
     args = ["0"]
-  ctx.bytecode.append(mnemonic[1] + ''.join(args))
+  ctx.bytecode.append(mnemonic[1])
+  ctx.bytecode.extend(args)
+
+def compute_jump(ctx, label_name, target_instr):
+  debug_print(ctx, "Computing jump to label '%s'" % label_name, "")
+  
+  if label_name not in ctx.labels:
+    print_error(ctx, "Label '%s' was not delcared" % ( label_name ))
+    return None
+
+  label = ctx.labels[label_name]
+  
+  jump_len = label[1] - target_instr
+  if jump_len == 0:
+    # Ignore the JMP instruction
+    print_warning(ctx, "Jump of zero length, ignoring")
+    return None
+  if abs(jump_len) > 32:
+    print_error(ctx, "Jump to label '%s' is too long: jump length is %s, but the max is 32" % ( label_name, jump_len ))
+    return None
+  # The arithmetic supports jumping by 4 addresses only
+  if abs(jump_len) not in  range(4,32,4):
+    print_error(ctx, "Distance to label '%s' is not a multiple of 4: distance is %s which is not in %s" % ( label_name, abs(jump_len), repr(range(4,33,4)) ))
+    return None
+  
+  jump_val = None
+  #JMP  x <  8:  pc -= 4*(x+1)
+  #     x >= 8:  pc += 4*(x-7)
+  if jump_len < 0:
+    # Jump backward
+    jump_val = (abs(jump_len)/4)-1
+    #emit(ctx, mnemonic, [jump_val])
+  else:
+    # Jump forward
+    jump_val = (abs(jump_len)/4)+7
+    #emit(ctx, mnemonic, [jump_val])
+  return jump_val
 
 def handle_jump(ctx, mnemonic, args):
   debug_print(ctx, "Handling jump", ctx.orig_line)
@@ -93,37 +138,24 @@ def handle_jump(ctx, mnemonic, args):
   arg = args[0]
   
   if RE_LABEL_IDENTIFIER.match(arg):
+    # Label
     if arg not in ctx.labels:
-      print_error(ctx, "Label '%s' was not delcared" % ( arg ))
+      # Defer computing jump until we are building the bytecode
+      debug_print(ctx, "Deferring jump from instruction %s to label '%s'" % (ctx.cur_instruction, arg), ctx.orig_line)
+      emit(ctx, mnemonic, [("JMP", arg, ctx.cur_instruction)])
       return
-    
-    label = ctx.labels[arg]
-
-    jump_len = label[1] - ctx.cur_instruction
-    if jump_len == 0:
-      # Ignore the JMP instruction
-      print_warning(ctx, "Jump of zero length, ignoring")
-      ctx.cur_instruction -= 1
-      return
-    if abs(jump_len) > 32:
-      print_error(ctx, "Jump to label '%s' is too long: jump length is %s, but the max is 32" % ( arg, jump_len ))
-      return
-    # The arithmetic supports jumping by 4 addresses only
-    if abs(jump_len) not in  range(4,32,4):
-      print_error(ctx, "Distance to label '%s' is not a multiple of 4: distance is %s which is not in %s" % ( arg, abs(jump_len), repr(range(4,33,4)) ))
-      return
-    
-    #JMP  x <  8:  pc -= 4*(x+1)
-    #     x >= 8:  pc += 4*(x-7)
-    if jump_len < 0:
-      # Jump backward
-      jump_val = (abs(jump_len)/4)-1
-      emit(ctx, mnemonic, [jump_val])
     else:
-      # Jump forward
-      jump_val = (abs(jump_len)/4)+7
+      jump_val = compute_jump(ctx, arg, ctx.cur_instruction)
+      if jump_val == None and not ctx.error:
+        # Ignoring jump
+        ctx.cur_instruction -= 1
+        return
+      elif jump_val == None and ctx.error:
+        return
+      
       emit(ctx, mnemonic, [jump_val])
   else:
+    # Value
     try:
       jump_val = int(arg, 16)
       if not (0 <= jump_val <= 15):
@@ -141,10 +173,13 @@ def handle_mnemonic(ctx, mnemonic, arg):
   # TODO: maybe make it a dict?
   m = [x for x in MNEMONICS if x[0] == mnemonic.upper()][0]
   if arg:
-    args = "".join(arg.split())
-    args = args.split(',')
+    # Remove whitespace between arguments
+    args = "".join(arg.split()).split(',')
   else:
     args = []
+    
+  # Jumps are calculated after the instruction counter is increased
+  ctx.cur_instruction += 1
   
   # Check for arguments in an argumentless mnemonic
   if m[2] == 0 and args:
@@ -174,8 +209,9 @@ def handle_mnemonic(ctx, mnemonic, arg):
         return
     
     emit(ctx, m, args)
-    
-  ctx.cur_instruction += 1
+
+   # Jumps are calculated before the instruction counter is increased
+   # ctx.cur_instruction += 1
 
       
   
@@ -188,6 +224,7 @@ def parse(filename):
       for line in in_file.readlines():
         ctx.cur_line += 1
         ctx.orig_line = line
+        
         # Strip comments
         line = RE_COMMENT.sub('', line)
         
@@ -223,9 +260,27 @@ def parse(filename):
         
         print_error(ctx, "Syntax error:")
         return
-          
+
+    bytecode = []
+    for i in ctx.bytecode:
+      if isinstance(i, str):
+        bytecode.append(i)
+      elif isinstance(i, tuple):
+        # Resolve deferred parameters
+        if i[0] == "JMP":
+          jump_val = compute_jump(ctx, i[1], i[2])
+          if jump_val == None and not ctx.error:
+            # Ignoring jump
+            bytecode.pop()
+          elif jump_val == None and ctx.error:
+            return
+          else:
+            bytecode.append(to_hexstring(jump_val))
+      else:
+        print "Error while building bytecode: '%s' not recognized" % repr(i)
+        
     print "Output bytecode: "
-    print ' '.join(ctx.bytecode)
+    print ' '.join([i+j for i,j in zip(bytecode[::2],bytecode[1::2])])
           
   except EnvironmentError, e:
     print e
