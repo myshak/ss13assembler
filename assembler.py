@@ -27,14 +27,14 @@ MNEMONICS           =   [
 #  ("NOP",    "F", 1),
   ]
 
-DEBUG = True
+DEBUG = False
 
 LABEL_IDENTIFIER    =   "[a-zA-Z]\w*"
 LABEL               =   "(" + LABEL_IDENTIFIER + "):"
 COMMENT             =   "#.*$"
 
 RE_MNEMONIC         =   re.compile("^(" + "|".join([x[0] for x in MNEMONICS]) + ")" + 
-                                   "(?:\s+(-?[0-9a-fA-F]+|" + LABEL_IDENTIFIER + "))?$", re.I)
+                                   "(?:\s+(-?\d+|" + LABEL_IDENTIFIER + "))?$", re.I)
 RE_LABEL_IDENTIFIER =   re.compile("^" + LABEL_IDENTIFIER + "$")
 RE_LABEL            =   re.compile("^" + LABEL + "$")
 RE_COMMENT          =   re.compile(COMMENT)
@@ -69,7 +69,7 @@ def print_warning(ctx, warn):
 def to_hexstring(num):
   val = ""
   if isinstance(num, str):
-    val = int(num, 16)
+    val = int(num, 10)
   else:
     val = num
   return hex(val)[2:].upper()
@@ -157,7 +157,7 @@ def handle_jump(ctx, mnemonic, args):
   else:
     # Value
     try:
-      jump_val = int(arg, 16)
+      jump_val = int(arg, 10)
       if not (0 <= jump_val <= 15):
         print_error(ctx, "Argument out of range: 0 <= %s <= 15" % ( jump_val ))
         return
@@ -201,7 +201,7 @@ def handle_mnemonic(ctx, mnemonic, arg):
     # Check for correct range of arguments. Works for us, because all arguments are 4 bit numbers
     for i in args:
       try:
-        if not (0 <= int(i, 16) <= 15):
+        if not (0 <= int(i, 10) <= 15):
           print_error(ctx, "Argument out of range: 0 <= %s <= 15" % ( i ))
           return
       except ValueError:

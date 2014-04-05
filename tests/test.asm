@@ -1,12 +1,12 @@
 #00 50 A0 B0 30 C0 11 81
 
 NOP
-label:
   OR 0 #foo?
+label:
   IEN 0 #barbar
   RTN
   OEN 0
-  AND FF
+  AND 15
 label2:
   JMP label
   LD 1
