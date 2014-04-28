@@ -44,7 +44,6 @@ class context:
     self.filename = filename
     self.cur_line = 0
     self.cur_instruction = 0
-    self.skip_next = False
     self.labels = {} # (name, instruction_pos, line_pos)
     self.bytecode = []
     self.error = False
@@ -191,12 +190,6 @@ def handle_mnemonic(ctx, mnemonic, arg):
     return
   if mnemonic.upper() == "JMP":
     handle_jump(ctx, m, args)
-  elif mnemonic.upper() == "RTN":
-    # RTN skips next instruction. Just ignore it and the next instruction
-    # Offsets to labels will be different then those in the source, so give a warning
-    print_warning(ctx, "Mnemonic RTN used, ignoring it and the following instruction. Offsets may be different for non-label JMP instructions")
-    ctx.skip_next = True
-    return
   else:
     # Check for correct range of arguments. Works for us, because all arguments are 4 bit numbers
     for i in args:
@@ -249,11 +242,9 @@ def parse(filename):
         is_mnemonic = RE_MNEMONIC.match(line)
         if is_mnemonic:
           debug_print(ctx, "Parsing mnemonic", line)
-          if ctx.skip_next == True:
-            ctx.skip_next = False
-            debug_print(ctx, "Skipping next instruction", line)
-            continue
+
           handle_mnemonic(ctx, is_mnemonic.group(1), is_mnemonic.group(2))
+
           if ctx.error:
             return
           continue
